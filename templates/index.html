@@ -7,7 +7,14 @@
         .message { color: green; }
         .error { color: red; }
         select option { padding: 5px; }
-        .color-option { display: inline-block; width: 20px; height: 20px; vertical-align: middle; margin-right: 5px; }
+        .color-ball { 
+            display: inline-block; 
+            width: 20px; 
+            height: 20px; 
+            border-radius: 50%; /* Makes it a circle */
+            vertical-align: middle; 
+            margin-right: 5px; 
+        }
     </style>
 </head>
 <body>
@@ -21,17 +28,17 @@
         <input type="text" name="event_details" placeholder="e.g., 20th March 2025, 11am jakarta, meeting with Steve" style="width: 300px;">
         <select name="color_id">
             <option value="">Default Color</option>
-            <option value="1"><span class="color-option" style="background-color: #7986cb;"></span>Lavender</option>
-            <option value="2"><span class="color-option" style="background-color: #33b679;"></span>Sage</option>
-            <option value="3"><span class="color-option" style="background-color: #8e24aa;"></span>Grape</option>
-            <option value="4"><span class="color-option" style="background-color: #e67c73;"></span>Flamingo</option>
-            <option value="5"><span class="color-option" style="background-color: #f6c026;"></span>Banana</option>
-            <option value="6"><span class="color-option" style="background-color: #f5511d;"></span>Tangerine</option>
-            <option value="7"><span class="color-option" style="background-color: #039be5;"></span>Peacock</option>
-            <option value="8"><span class="color-option" style="background-color: #616161;"></span>Graphite</option>
-            <option value="9"><span class="color-option" style="background-color: #3f51b5;"></span>Blueberry</option>
-            <option value="10"><span class="color-option" style="background-color: #0b8043;"></span>Basil</option>
-            <option value="11"><span class="color-option" style="background-color: #d81b60;"></span>Tomato</option>
+            <option value="1"><span class="color-ball" style="background-color: #7986cb;"></span>Lavender</option>
+            <option value="2"><span class="color-ball" style="background-color: #33b679;"></span>Sage</option>
+            <option value="3"><span class="color-ball" style="background-color: #8e24aa;"></span>Grape</option>
+            <option value="4"><span class="color-ball" style="background-color: #e67c73;"></span>Flamingo</option>
+            <option value="5"><span class="color-ball" style="background-color: #f6c026;"></span>Banana</option>
+            <option value="6"><span class="color-ball" style="background-color: #f5511d;"></span>Tangerine</option>
+            <option value="7"><span class="color-ball" style="background-color: #039be5;"></span>Peacock</option>
+            <option value="8"><span class="color-ball" style="background-color: #616161;"></span>Graphite</option>
+            <option value="9"><span class="color-ball" style="background-color: #3f51b5;"></span>Blueberry</option>
+            <option value="10"><span class="color-ball" style="background-color: #0b8043;"></span>Basil</option>
+            <option value="11"><span class="color-ball" style="background-color: #d81b60;"></span>Tomato</option>
         </select>
         <input type="submit" value="Create Event">
     </form>
