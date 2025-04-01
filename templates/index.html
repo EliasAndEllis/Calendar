@@ -16,7 +16,7 @@
     
     <h2>Create Event</h2>
     <form method="POST" action="{{ url_for('create') }}">
-        <input type="text" name="event_details" placeholder="e.g., 03/17 12pm toronto time meeting 1" style="width: 300px;">
+        <input type="text" name="event_details" placeholder="e.g., 03/17 12:00pm toronto time meeting 1 [color_id 1-11]" style="width: 400px;">
         <input type="submit" value="Create">
     </form>
 
@@ -24,10 +24,16 @@
     {% if events %}
         <ul>
         {% for event in events %}
-            <li>{{ event.summary }} - {{ event.start }} 
+            <li>
+                {{ event.summary }} - 
+                {% if event.start.dateTime %}
+                    {{ event.start.dateTime }}
+                {% else %}
+                    {{ event.start.date }}
+                {% endif %}
                 <form method="POST" action="{{ url_for('modify') }}" style="display:inline;">
                     <input type="hidden" name="event_id" value="{{ event.id }}">
-                    <input type="text" name="new_details" placeholder="New details" style="width: 200px;">
+                    <input type="text" name="new_details" placeholder="e.g., 03/18 1:00pm toronto time meeting 2 [color_id 1-11]" style="width: 400px;">
                     <input type="submit" value="Modify">
                 </form>
             </li>
@@ -36,5 +42,7 @@
     {% else %}
         <p>No upcoming events found.</p>
     {% endif %}
+
+    <p><a href="{{ url_for('logout') }}">Logout</a></p>
 </body>
 </html>
