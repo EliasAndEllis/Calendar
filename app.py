@@ -10,7 +10,8 @@ import pytz
 import json
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Replace with a random string
+# Use an environment variable for the secret key (set this in Render's dashboard)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')  # Replace 'your-secret-key-here' with a secure random string
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 TIMEZONE_MAP = {
@@ -22,6 +23,7 @@ TIMEZONE_MAP = {
 VALID_COLOR_IDS = [str(i) for i in range(1, 12)]
 
 def get_service():
+    """Create a Google Calendar API service object using stored credentials."""
     creds = None
     if 'credentials' in session:
         creds = Credentials(**session['credentials'])
@@ -34,6 +36,7 @@ def get_service():
     return build('calendar', 'v3', credentials=creds)
 
 def credentials_to_dict(credentials):
+    """Convert Google OAuth credentials to a dictionary for session storage."""
     return {
         'token': credentials.token,
         'refresh_token': credentials.refresh_token,
@@ -44,7 +47,7 @@ def credentials_to_dict(credentials):
     }
 
 def list_recent_events(service):
-    """Fetch the 10 most recent events from the user's primary calendar."""
+    """Fetch the 10 most recent upcoming events from the user's primary calendar."""
     try:
         now = datetime.datetime.utcnow().isoformat() + 'Z'  # 'Z' indicates UTC time
         events_result = service.events().list(
@@ -160,6 +163,7 @@ def modify_calendar_event(service, event_id, event_details):
 
 @app.route('/')
 def index():
+    """Render the main page with a list of upcoming events."""
     if 'credentials' not in session:
         return redirect(url_for('login'))
     service = get_service()
@@ -168,6 +172,7 @@ def index():
 
 @app.route('/login')
 def login():
+    """Initiate Google OAuth login flow."""
     flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
     flow.redirect_uri = url_for('callback', _external=True)
     authorization_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
@@ -176,6 +181,7 @@ def login():
 
 @app.route('/callback')
 def callback():
+    """Handle the OAuth callback and store credentials."""
     state = session['state']
     flow = Flow.from_client_secrets_file('credentials.json', SCOPES, state=state)
     flow.redirect_uri = url_for('callback', _external=True)
@@ -185,6 +191,7 @@ def callback():
 
 @app.route('/create', methods=['POST'])
 def create():
+    """Create a new calendar event based on user input."""
     service = get_service()
     if not service:
         return redirect(url_for('login'))
@@ -199,6 +206,7 @@ def create():
 
 @app.route('/modify', methods=['POST'])
 def modify():
+    """Modify an existing calendar event based on user input."""
     service = get_service()
     if not service:
         return redirect(url_for('login'))
@@ -210,6 +218,14 @@ def modify():
         session['message'] = "Event updated successfully."
     except ValueError as e:
         session['message'] = f"Error: {e}"
+    return redirect(url_for('index'))
+
+@app.route('/logout')
+def logout():
+    """Log the user out by clearing the session."""
+    session.pop('credentials', None)
+    session.pop('state', None)
+    session.pop('message', None)
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
