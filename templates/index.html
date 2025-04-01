@@ -16,8 +16,22 @@
     
     <h2>Create Event</h2>
     <form method="POST" action="{{ url_for('create') }}">
-        <input type="text" name="event_details" placeholder="e.g., 03/17 12pm toronto time meeting 1" style="width: 300px;">
-        <input type="submit" value="Create">
+        <input type="text" name="event_details" placeholder="e.g., March 17 12pm toronto time meeting 1" style="width: 300px;">
+        <select name="color_id">
+            <option value="">Default Color</option>
+            <option value="1">Lavender (#7986cb)</option>
+            <option value="2">Sage (#33b679)</option>
+            <option value="3">Grape (#8e24aa)</option>
+            <option value="4">Flamingo (#e67c73)</option>
+            <option value="5">Banana (#f6c026)</option>
+            <option value="6">Tangerine (#f5511d)</option>
+            <option value="7">Peacock (#039be5)</option>
+            <option value="8">Graphite (#616161)</option>
+            <option value="9">Blueberry (#3f51b5)</option>
+            <option value="10">Basil (#0b8043)</option>
+            <option value="11">Tomato (#d81b60)</option>
+        </select>
+        <input type="submit" value="Create Event">
     </form>
 
     <h2>Recent Events</h2>
