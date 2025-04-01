@@ -5,3 +5,5 @@ google-api-python-client==2.121.0
 python-dateutil==2.9.0.post0
 pytz==2024.1
 gunicorn==22.0.0
+geopy==2.4.1
+timezonefinder==6.5.2
