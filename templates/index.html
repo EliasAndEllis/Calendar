@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Calendar Agent</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .message { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Calendar Agent</h1>
+    {% if message %}
+        <p class="{{ 'message' if 'Error' not in message else 'error' }}">{{ message }}</p>
+    {% endif %}
+    
+    <h2>Create Event</h2>
+    <form method="POST" action="{{ url_for('create') }}">
+        <input type="text" name="event_details" placeholder="e.g., 03/17 12pm toronto time meeting 1" style="width: 300px;">
+        <input type="submit" value="Create">
+    </form>
+
+    <h2>Recent Events</h2>
+    {% if events %}
+        <ul>
+        {% for event in events %}
+            <li>{{ event.summary }} - {{ event.start }} 
+                <form method="POST" action="{{ url_for('modify') }}" style="display:inline;">
+                    <input type="hidden" name="event_id" value="{{ event.id }}">
+                    <input type="text" name="new_details" placeholder="New details" style="width: 200px;">
+                    <input type="submit" value="Modify">
+                </form>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No upcoming events found.</p>
+    {% endif %}
+</body>
+</html>
