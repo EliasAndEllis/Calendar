@@ -6,7 +6,49 @@
         body { font-family: Arial, sans-serif; margin: 20px; }
         .message { color: green; }
         .error { color: red; }
-        select option { padding: 5px; }
+        
+        /* Custom dropdown styles */
+        .custom-dropdown {
+            position: relative;
+            display: inline-block;
+            width: 200px;
+        }
+        .dropdown-selected {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .dropdown-selected:hover {
+            background-color: #f0f0f0;
+        }
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+        }
+        .dropdown-menu.show {
+            display: block;
+        }
+        .dropdown-item {
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .dropdown-item:hover {
+            background-color: #f0f0f0;
+        }
         .color-ball { 
             display: inline-block; 
             width: 20px; 
@@ -26,20 +68,52 @@
     <h2>Create Event</h2>
     <form method="POST" action="{{ url_for('create') }}">
         <input type="text" name="event_details" placeholder="e.g., 20th March 2025, 11am jakarta, meeting with Steve" style="width: 300px;">
-        <select name="color_id">
-            <option value="">Default Color</option>
-            <option value="1"><span class="color-ball" style="background-color: #7986cb;"></span>Lavender</option>
-            <option value="2"><span class="color-ball" style="background-color: #33b679;"></span>Sage</option>
-            <option value="3"><span class="color-ball" style="background-color: #8e24aa;"></span>Grape</option>
-            <option value="4"><span class="color-ball" style="background-color: #e67c73;"></span>Flamingo</option>
-            <option value="5"><span class="color-ball" style="background-color: #f6c026;"></span>Banana</option>
-            <option value="6"><span class="color-ball" style="background-color: #f5511d;"></span>Tangerine</option>
-            <option value="7"><span class="color-ball" style="background-color: #039be5;"></span>Peacock</option>
-            <option value="8"><span class="color-ball" style="background-color: #616161;"></span>Graphite</option>
-            <option value="9"><span class="color-ball" style="background-color: #3f51b5;"></span>Blueberry</option>
-            <option value="10"><span class="color-ball" style="background-color: #0b8043;"></span>Basil</option>
-            <option value="11"><span class="color-ball" style="background-color: #d81b60;"></span>Tomato</option>
-        </select>
+        
+        <!-- Custom dropdown -->
+        <div class="custom-dropdown">
+            <div class="dropdown-selected" id="dropdown-selected">Default Color</div>
+            <div class="dropdown-menu" id="dropdown-menu">
+                <div class="dropdown-item" data-value="" data-color="Default Color">
+                    Default Color
+                </div>
+                <div class="dropdown-item" data-value="1" data-color="Lavender">
+                    <span class="color-ball" style="background-color: #7986cb;"></span>Lavender
+                </div>
+                <div class="dropdown-item" data-value="2" data-color="Sage">
+                    <span class="color-ball" style="background-color: #33b679;"></span>Sage
+                </div>
+                <div class="dropdown-item" data-value="3" data-color="Grape">
+                    <span class="color-ball" style="background-color: #8e24aa;"></span>Grape
+                </div>
+                <div class="dropdown-item" data-value="4" data-color="Flamingo">
+                    <span class="color-ball" style="background-color: #e67c73;"></span>Flamingo
+                </div>
+                <div class="dropdown-item" data-value="5" data-color="Banana">
+                    <span class="color-ball" style="background-color: #f6c026;"></span>Banana
+                </div>
+                <div class="dropdown-item" data-value="6" data-color="Tangerine">
+                    <span class="color-ball" style="background-color: #f5511d;"></span>Tangerine
+                </div>
+                <div class="dropdown-item" data-value="7" data-color="Peacock">
+                    <span class="color-ball" style="background-color: #039be5;"></span>Peacock
+                </div>
+                <div class="dropdown-item" data-value="8" data-color="Graphite">
+                    <span class="color-ball" style="background-color: #616161;"></span>Graphite
+                </div>
+                <div class="dropdown-item" data-value="9" data-color="Blueberry">
+                    <span class="color-ball" style="background-color: #3f51b5;"></span>Blueberry
+                </div>
+                <div class="dropdown-item" data-value="10" data-color="Basil">
+                    <span class="color-ball" style="background-color: #0b8043;"></span>Basil
+                </div>
+                <div class="dropdown-item" data-value="11" data-color="Tomato">
+                    <span class="color-ball" style="background-color: #d81b60;"></span>Tomato
+                </div>
+            </div>
+        </div>
+        <!-- Hidden input to store the selected color_id for form submission -->
+        <input type="hidden" name="color_id" id="color_id" value="">
+
         <input type="submit" value="Create Event">
     </form>
 
@@ -59,5 +133,36 @@
     {% else %}
         <p>No upcoming events found.</p>
     {% endif %}
+
+    <!-- JavaScript to handle the custom dropdown -->
+    <script>
+        const dropdownSelected = document.getElementById('dropdown-selected');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+        const dropdownItems = document.querySelectorAll('.dropdown-item');
+        const colorIdInput = document.getElementById('color_id');
+
+        // Toggle dropdown menu on click
+        dropdownSelected.addEventListener('click', () => {
+            dropdownMenu.classList.toggle('show');
+        });
+
+        // Handle item selection
+        dropdownItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const value = item.getAttribute('data-value');
+                const colorText = item.getAttribute('data-color');
+                dropdownSelected.innerHTML = item.innerHTML; // Show the color ball and text in the selected area
+                colorIdInput.value = value; // Set the hidden input value for form submission
+                dropdownMenu.classList.remove('show'); // Close the dropdown
+            });
+        });
+
+        // Close dropdown if clicking outside
+        document.addEventListener('click', (e) => {
+            if (!dropdownSelected.contains(e.target) && !dropdownMenu.contains(e.target)) {
+                dropdownMenu.classList.remove('show');
+            }
+        });
+    </script>
 </body>
 </html>
