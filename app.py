@@ -62,35 +62,25 @@ def list_recent_events(service):
 
 def parse_input(user_input):
     """Parse user input with flexible date formats to extract event details."""
-    parts = user_input.lower().split()
-    if len(parts) < 4:
-        raise ValueError("Invalid input format. Use: date time city event_name (e.g., '20th March 2025 11am jakarta meeting with Steve')")
+    # Split by commas to match desired format: "date, time city, event_name"
+    parts = [part.strip() for part in user_input.split(',')]
+    if len(parts) != 3:
+        raise ValueError("Invalid input format. Use: 'date, time city, event title' (e.g., '20th March 2025, 11am jakarta, meeting with Steve')")
 
-    # Use dateutil.parser to handle various date formats
     try:
-        # Try to parse the first 1-3 parts as a date
-        for i in range(1, 4):
-            date_str = " ".join(parts[:i])
-            try:
-                date = parser.parse(date_str)
-                if date.year == datetime.datetime.now().year:  # If year wasn't specified
-                    date = date.replace(year=datetime.datetime.now().year)
-                date_parts = i
-                break
-            except ValueError:
-                continue
-        else:
-            raise ValueError("Could not parse date. Try formats like '20th March 2025', '17 Mar', or '03/17'")
+        # Parse date
+        date_str = parts[0].lower()
+        date = parser.parse(date_str)
+        if date.year == datetime.datetime.now().year and "20" not in date_str:  # If year wasn't specified
+            date = date.replace(year=datetime.datetime.now().year)
 
-        # Extract time
-        time_str = parts[date_parts]
+        # Parse time and city
+        time_city_str = parts[1].lower().split()
+        time_str = time_city_str[0]
         time = parser.parse(time_str, default=datetime.datetime.now()).time()
-        event_datetime = datetime.datetime.combine(date.date(), time)
 
-        # Extract city
-        tz_start = date_parts + 1
-        # Check for a two-word city name (e.g., "new york")
-        city_str = " ".join(parts[tz_start:tz_start+2]) if tz_start + 1 < len(parts) and " ".join(parts[tz_start:tz_start+2]) else parts[tz_start]
+        # Extract city (could be 1 or 2 words)
+        city_str = " ".join(time_city_str[1:])
         # Geocode the city to get latitude and longitude
         try:
             location = geolocator.geocode(city_str, timeout=10)
@@ -109,15 +99,15 @@ def parse_input(user_input):
         except pytz.exceptions.UnknownTimeZoneError:
             raise ValueError(f"Invalid timezone found for city: '{city_str}'. Timezone: '{timezone_str}' is not recognized.")
 
-        # Localize and convert to UTC
+        # Combine date and time, localize, and convert to UTC
+        event_datetime = datetime.datetime.combine(date.date(), time)
         event_datetime = timezone.localize(event_datetime)
         event_datetime_utc = event_datetime.astimezone(pytz.UTC)
 
-        # Extract event name
-        name_start = tz_start + 2 if tz_start + 1 < len(parts) and " ".join(parts[tz_start:tz_start+2]) == city_str else tz_start + 1
-        event_name = " ".join(parts[name_start:])
+        # Event name
+        event_name = parts[2].strip()
         if not event_name:
-            raise ValueError("Event name cannot be empty.")
+            raise ValueError("Event title cannot be empty.")
 
         return {
             'summary': event_name,
@@ -126,7 +116,9 @@ def parse_input(user_input):
         }
 
     except ValueError as e:
-        raise ValueError(f"Error parsing input: {str(e)}")
+        raise ValueError(f"Error parsing input: {str(e)}. Example: '20th March 2025, 11am jakarta, meeting with Steve'")
+    except Exception as e:
+        raise ValueError(f"Unexpected error while parsing input: {str(e)}. Please try again with a valid format.")
 
 def check_for_duplicate(service, event_details):
     """Check if an event with the same summary, start, and end time already exists."""
@@ -209,6 +201,8 @@ def create():
         session['message'] = f"Event created: {event_link}" if event_link else "Event already exists."
     except ValueError as e:
         session['message'] = f"Error: {e}"
+    except Exception as e:
+        session['message'] = f"Unexpected error: {str(e)}. Please try again."
     return redirect(url_for('index'))
 
 @app.route('/modify', methods=['POST'])
@@ -224,6 +218,8 @@ def modify():
         session['message'] = "Event updated successfully."
     except ValueError as e:
         session['message'] = f"Error: {e}"
+    except Exception as e:
+        session['message'] = f"Unexpected error: {str(e)}. Please try again."
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
