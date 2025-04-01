@@ -8,20 +8,18 @@ from dateutil import parser
 import datetime
 import pytz
 import json
+from geopy.geocoders import Nominatim
+from timezonefinder import TimezoneFinder
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Replace with a random string
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-# Updated to map city names directly to IANA timezones
-CITY_TIMEZONE_MAP = {
-    "toronto": "America/Toronto",
-    "new york": "America/New_York",
-    "london": "Europe/London",
-    "tokyo": "Asia/Tokyo",
-    "jakarta": "Asia/Jakarta",  # Added for your example
-}
 VALID_COLOR_IDS = [str(i) for i in range(1, 12)]
+
+# Initialize geocoder and timezone finder
+geolocator = Nominatim(user_agent="calendar_agent")
+tf = TimezoneFinder()
 
 def get_service():
     creds = None
@@ -66,7 +64,7 @@ def parse_input(user_input):
     """Parse user input with flexible date formats to extract event details."""
     parts = user_input.lower().split()
     if len(parts) < 4:
-        raise ValueError("Invalid input format. Use: date time timezone event_name")
+        raise ValueError("Invalid input format. Use: date time city event_name (e.g., '20th March 2025 11am jakarta meeting with Steve')")
 
     # Use dateutil.parser to handle various date formats
     try:
@@ -82,27 +80,41 @@ def parse_input(user_input):
             except ValueError:
                 continue
         else:
-            raise ValueError("Could not parse date. Try formats like 'March 17', '17 Mar', or '03/17'")
+            raise ValueError("Could not parse date. Try formats like '20th March 2025', '17 Mar', or '03/17'")
 
         # Extract time
         time_str = parts[date_parts]
         time = parser.parse(time_str, default=datetime.datetime.now()).time()
         event_datetime = datetime.datetime.combine(date.date(), time)
 
-        # Extract city (instead of timezone)
+        # Extract city
         tz_start = date_parts + 1
         # Check for a two-word city name (e.g., "new york")
-        city_str = " ".join(parts[tz_start:tz_start+2]) if parts[tz_start] + " " + parts[tz_start+1] in CITY_TIMEZONE_MAP else parts[tz_start]
-        if city_str not in CITY_TIMEZONE_MAP:
-            raise ValueError(f"Invalid city. Supported cities: {', '.join(CITY_TIMEZONE_MAP.keys())}")
-        timezone = pytz.timezone(CITY_TIMEZONE_MAP[city_str])
+        city_str = " ".join(parts[tz_start:tz_start+2]) if tz_start + 1 < len(parts) and " ".join(parts[tz_start:tz_start+2]) else parts[tz_start]
+        # Geocode the city to get latitude and longitude
+        try:
+            location = geolocator.geocode(city_str, timeout=10)
+            if not location:
+                raise ValueError(f"Could not find timezone for city: '{city_str}'. Please use a valid city name.")
+            latitude, longitude = location.latitude, location.longitude
+        except Exception as e:
+            raise ValueError(f"Error finding city: '{city_str}'. Please use a valid city name. Error: {str(e)}")
+
+        # Get the IANA timezone from the coordinates
+        timezone_str = tf.timezone_at(lat=latitude, lng=longitude)
+        if not timezone_str:
+            raise ValueError(f"Could not determine timezone for city: '{city_str}' at coordinates ({latitude}, {longitude}).")
+        try:
+            timezone = pytz.timezone(timezone_str)
+        except pytz.exceptions.UnknownTimeZoneError:
+            raise ValueError(f"Invalid timezone found for city: '{city_str}'. Timezone: '{timezone_str}' is not recognized.")
 
         # Localize and convert to UTC
         event_datetime = timezone.localize(event_datetime)
         event_datetime_utc = event_datetime.astimezone(pytz.UTC)
 
         # Extract event name
-        name_start = tz_start + 2 if " ".join(parts[tz_start:tz_start+2]) in CITY_TIMEZONE_MAP else tz_start + 1
+        name_start = tz_start + 2 if tz_start + 1 < len(parts) and " ".join(parts[tz_start:tz_start+2]) == city_str else tz_start + 1
         event_name = " ".join(parts[name_start:])
         if not event_name:
             raise ValueError("Event name cannot be empty.")
