@@ -13,20 +13,15 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Replace with a random string
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-VALID_COLOR_IDS = [str(i) for i in range(1, 12)]
-
-# Map city names to IANA timezone names
+# Updated to map city names directly to IANA timezones
 CITY_TIMEZONE_MAP = {
-    "jakarta": "Asia/Jakarta",
     "toronto": "America/Toronto",
     "new york": "America/New_York",
     "london": "Europe/London",
     "tokyo": "Asia/Tokyo",
-    "los angeles": "America/Los_Angeles",
-    "paris": "Europe/Paris",
-    "sydney": "Australia/Sydney",
-    # Add more cities as needed
+    "jakarta": "Asia/Jakarta",  # Added for your example
 }
+VALID_COLOR_IDS = [str(i) for i in range(1, 12)]
 
 def get_service():
     creds = None
@@ -69,42 +64,48 @@ def list_recent_events(service):
 
 def parse_input(user_input):
     """Parse user input with flexible date formats to extract event details."""
-    # Split by commas to match desired format: "date, time city, event_name"
-    parts = [part.strip() for part in user_input.split(',')]
-    if len(parts) != 3:
-        raise ValueError("Invalid input format. Use: 'date, time city, event title' (e.g., '20th March 2025, 11am jakarta, meeting with steve')")
+    parts = user_input.lower().split()
+    if len(parts) < 4:
+        raise ValueError("Invalid input format. Use: date time timezone event_name")
 
+    # Use dateutil.parser to handle various date formats
     try:
-        # Parse date
-        date_str = parts[0].lower()
-        date = parser.parse(date_str)
-        if date.year == datetime.datetime.now().year and "20" not in date_str:  # If year wasn't specified
-            date = date.replace(year=datetime.datetime.now().year)
-
-        # Parse time and city
-        time_city_str = parts[1].lower().split()
-        time_str = time_city_str[0]
-        time = parser.parse(time_str, default=datetime.datetime.now()).time()
-
-        # Extract city (could be 1 or 2 words)
-        city_str = " ".join(time_city_str[1:])
-        # Check if it's a known city or a valid IANA timezone
-        if city_str in CITY_TIMEZONE_MAP:
-            timezone = pytz.timezone(CITY_TIMEZONE_MAP[city_str])
-        elif city_str in pytz.all_timezones:
-            timezone = pytz.timezone(city_str)
+        # Try to parse the first 1-3 parts as a date
+        for i in range(1, 4):
+            date_str = " ".join(parts[:i])
+            try:
+                date = parser.parse(date_str)
+                if date.year == datetime.datetime.now().year:  # If year wasn't specified
+                    date = date.replace(year=datetime.datetime.now().year)
+                date_parts = i
+                break
+            except ValueError:
+                continue
         else:
-            raise ValueError(f"Invalid city/timezone: '{city_str}'. Use a city like 'jakarta', 'toronto', or an IANA timezone like 'Asia/Jakarta'")
+            raise ValueError("Could not parse date. Try formats like 'March 17', '17 Mar', or '03/17'")
 
-        # Combine date and time, localize, and convert to UTC
+        # Extract time
+        time_str = parts[date_parts]
+        time = parser.parse(time_str, default=datetime.datetime.now()).time()
         event_datetime = datetime.datetime.combine(date.date(), time)
+
+        # Extract city (instead of timezone)
+        tz_start = date_parts + 1
+        # Check for a two-word city name (e.g., "new york")
+        city_str = " ".join(parts[tz_start:tz_start+2]) if parts[tz_start] + " " + parts[tz_start+1] in CITY_TIMEZONE_MAP else parts[tz_start]
+        if city_str not in CITY_TIMEZONE_MAP:
+            raise ValueError(f"Invalid city. Supported cities: {', '.join(CITY_TIMEZONE_MAP.keys())}")
+        timezone = pytz.timezone(CITY_TIMEZONE_MAP[city_str])
+
+        # Localize and convert to UTC
         event_datetime = timezone.localize(event_datetime)
         event_datetime_utc = event_datetime.astimezone(pytz.UTC)
 
-        # Event name
-        event_name = parts[2].strip()
+        # Extract event name
+        name_start = tz_start + 2 if " ".join(parts[tz_start:tz_start+2]) in CITY_TIMEZONE_MAP else tz_start + 1
+        event_name = " ".join(parts[name_start:])
         if not event_name:
-            raise ValueError("Event title cannot be empty.")
+            raise ValueError("Event name cannot be empty.")
 
         return {
             'summary': event_name,
@@ -113,7 +114,7 @@ def parse_input(user_input):
         }
 
     except ValueError as e:
-        raise ValueError(f"Error parsing input: {str(e)}. Example: '20th March 2025, 11am jakarta, meeting with steve'")
+        raise ValueError(f"Error parsing input: {str(e)}")
 
 def check_for_duplicate(service, event_details):
     """Check if an event with the same summary, start, and end time already exists."""
