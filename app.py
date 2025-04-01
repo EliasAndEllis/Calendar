@@ -61,61 +61,57 @@ def list_recent_events(service):
         return []
 
 def parse_input(user_input):
-    """Parse user input to extract event details (e.g., '03/17 12pm toronto time meeting 1')."""
+    """Parse user input with flexible date formats to extract event details."""
     parts = user_input.lower().split()
     if len(parts) < 4:
-        raise ValueError("Invalid input format. Use: MM/DD HH:MMam/pm timezone event_name [color_id]")
+        raise ValueError("Invalid input format. Use: date time timezone event_name")
 
-    # Extract date (MM/DD)
-    date_str = parts[0]
-    if not date_str.startswith('0') and len(date_str.split('/')[0]) == 1:
-        date_str = '0' + date_str
+    # Use dateutil.parser to handle various date formats
     try:
-        date = datetime.datetime.strptime(date_str, '%m/%d')
-        date = date.replace(year=datetime.datetime.now().year)  # Assume current year
-    except ValueError:
-        raise ValueError("Invalid date format. Use MM/DD (e.g., 03/17).")
+        # Try to parse the first 1-3 parts as a date
+        for i in range(1, 4):
+            date_str = " ".join(parts[:i])
+            try:
+                date = parser.parse(date_str)
+                if date.year == datetime.datetime.now().year:  # If year wasn't specified
+                    date = date.replace(year=datetime.datetime.now().year)
+                date_parts = i
+                break
+            except ValueError:
+                continue
+        else:
+            raise ValueError("Could not parse date. Try formats like 'March 17', '17 Mar', or '03/17'")
 
-    # Extract time (HH:MMam/pm)
-    time_str = parts[1]
-    try:
-        time = datetime.datetime.strptime(time_str, '%I:%M%p')
-    except ValueError:
-        raise ValueError("Invalid time format. Use HH:MMam/pm (e.g., 12:00pm).")
+        # Extract time
+        time_str = parts[date_parts]
+        time = parser.parse(time_str, default=datetime.datetime.now()).time()
+        event_datetime = datetime.datetime.combine(date.date(), time)
 
-    # Combine date and time
-    event_datetime = datetime.datetime.combine(date.date(), time.time())
+        # Extract timezone
+        tz_start = date_parts + 1
+        timezone_str = " ".join(parts[tz_start:tz_start+2]) if parts[tz_start] + " " + parts[tz_start+1] in TIMEZONE_MAP else parts[tz_start]
+        if timezone_str not in TIMEZONE_MAP:
+            raise ValueError(f"Invalid timezone. Supported timezones: {', '.join(TIMEZONE_MAP.keys())}")
+        timezone = pytz.timezone(TIMEZONE_MAP[timezone_str])
 
-    # Extract timezone
-    timezone_str = " ".join(parts[2:4]) if parts[2] + " " + parts[3] in TIMEZONE_MAP else parts[2]
-    if timezone_str not in TIMEZONE_MAP:
-        raise ValueError(f"Invalid timezone. Supported timezones: {', '.join(TIMEZONE_MAP.keys())}")
-    timezone = pytz.timezone(TIMEZONE_MAP[timezone_str])
+        # Localize and convert to UTC
+        event_datetime = timezone.localize(event_datetime)
+        event_datetime_utc = event_datetime.astimezone(pytz.UTC)
 
-    # Localize the datetime to the specified timezone
-    event_datetime = timezone.localize(event_datetime)
+        # Extract event name
+        name_start = tz_start + 2 if " ".join(parts[tz_start:tz_start+2]) in TIMEZONE_MAP else tz_start + 1
+        event_name = " ".join(parts[name_start:])
+        if not event_name:
+            raise ValueError("Event name cannot be empty.")
 
-    # Convert to UTC for Google Calendar
-    event_datetime_utc = event_datetime.astimezone(pytz.UTC)
+        return {
+            'summary': event_name,
+            'start': event_datetime_utc.isoformat(),
+            'end': (event_datetime_utc + datetime.timedelta(hours=1)).isoformat(),  # Default 1-hour duration
+        }
 
-    # Extract event name (everything after timezone until color_id or end)
-    color_id = None
-    if parts[-1] in VALID_COLOR_IDS:
-        color_id = parts[-1]
-        event_name_parts = parts[4:-1] if " ".join(parts[2:4]) in TIMEZONE_MAP else parts[3:-1]
-    else:
-        event_name_parts = parts[4:] if " ".join(parts[2:4]) in TIMEZONE_MAP else parts[3:]
-
-    event_name = " ".join(event_name_parts)
-    if not event_name:
-        raise ValueError("Event name cannot be empty.")
-
-    return {
-        'summary': event_name,
-        'start': event_datetime_utc.isoformat(),
-        'end': (event_datetime_utc + datetime.timedelta(hours=1)).isoformat(),  # Default 1-hour duration
-        'colorId': color_id
-    }
+    except ValueError as e:
+        raise ValueError(f"Error parsing input: {str(e)}")
 
 def check_for_duplicate(service, event_details):
     """Check if an event with the same summary, start, and end time already exists."""
@@ -189,8 +185,11 @@ def create():
     if not service:
         return redirect(url_for('login'))
     user_input = request.form['event_details']
+    color_id = request.form['color_id']
     try:
         event_details = parse_input(user_input)
+        if color_id:  # Only add colorId if a color was selected
+            event_details['colorId'] = color_id
         event_link = create_calendar_event(service, event_details)
         session['message'] = f"Event created: {event_link}" if event_link else "Event already exists."
     except ValueError as e:
