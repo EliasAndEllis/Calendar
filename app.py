@@ -43,8 +43,120 @@ def credentials_to_dict(credentials):
         'scopes': credentials.scopes
     }
 
-# Your existing parse_input, check_for_duplicate, create_calendar_event, list_recent_events, modify_calendar_event functions remain mostly unchanged
-# (Just update them to return values instead of printing, e.g., return event.get('htmlLink') instead of print())
+def list_recent_events(service):
+    """Fetch the 10 most recent events from the user's primary calendar."""
+    try:
+        now = datetime.datetime.utcnow().isoformat() + 'Z'  # 'Z' indicates UTC time
+        events_result = service.events().list(
+            calendarId='primary',
+            timeMin=now,
+            maxResults=10,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        events = events_result.get('items', [])
+        return events
+    except Exception as e:
+        print(f"Error fetching events: {e}")
+        return []
+
+def parse_input(user_input):
+    """Parse user input to extract event details (e.g., '03/17 12pm toronto time meeting 1')."""
+    parts = user_input.lower().split()
+    if len(parts) < 4:
+        raise ValueError("Invalid input format. Use: MM/DD HH:MMam/pm timezone event_name [color_id]")
+
+    # Extract date (MM/DD)
+    date_str = parts[0]
+    if not date_str.startswith('0') and len(date_str.split('/')[0]) == 1:
+        date_str = '0' + date_str
+    try:
+        date = datetime.datetime.strptime(date_str, '%m/%d')
+        date = date.replace(year=datetime.datetime.now().year)  # Assume current year
+    except ValueError:
+        raise ValueError("Invalid date format. Use MM/DD (e.g., 03/17).")
+
+    # Extract time (HH:MMam/pm)
+    time_str = parts[1]
+    try:
+        time = datetime.datetime.strptime(time_str, '%I:%M%p')
+    except ValueError:
+        raise ValueError("Invalid time format. Use HH:MMam/pm (e.g., 12:00pm).")
+
+    # Combine date and time
+    event_datetime = datetime.datetime.combine(date.date(), time.time())
+
+    # Extract timezone
+    timezone_str = " ".join(parts[2:4]) if parts[2] + " " + parts[3] in TIMEZONE_MAP else parts[2]
+    if timezone_str not in TIMEZONE_MAP:
+        raise ValueError(f"Invalid timezone. Supported timezones: {', '.join(TIMEZONE_MAP.keys())}")
+    timezone = pytz.timezone(TIMEZONE_MAP[timezone_str])
+
+    # Localize the datetime to the specified timezone
+    event_datetime = timezone.localize(event_datetime)
+
+    # Convert to UTC for Google Calendar
+    event_datetime_utc = event_datetime.astimezone(pytz.UTC)
+
+    # Extract event name (everything after timezone until color_id or end)
+    color_id = None
+    if parts[-1] in VALID_COLOR_IDS:
+        color_id = parts[-1]
+        event_name_parts = parts[4:-1] if " ".join(parts[2:4]) in TIMEZONE_MAP else parts[3:-1]
+    else:
+        event_name_parts = parts[4:] if " ".join(parts[2:4]) in TIMEZONE_MAP else parts[3:]
+
+    event_name = " ".join(event_name_parts)
+    if not event_name:
+        raise ValueError("Event name cannot be empty.")
+
+    return {
+        'summary': event_name,
+        'start': event_datetime_utc.isoformat(),
+        'end': (event_datetime_utc + datetime.timedelta(hours=1)).isoformat(),  # Default 1-hour duration
+        'colorId': color_id
+    }
+
+def check_for_duplicate(service, event_details):
+    """Check if an event with the same summary, start, and end time already exists."""
+    events = service.events().list(
+        calendarId='primary',
+        timeMin=event_details['start'],
+        timeMax=event_details['end'],
+        q=event_details['summary']
+    ).execute()
+    for event in events.get('items', []):
+        if (event['summary'] == event_details['summary'] and
+            event['start'].get('dateTime') == event_details['start'] and
+            event['end'].get('dateTime') == event_details['end']):
+            return True
+    return False
+
+def create_calendar_event(service, event_details):
+    """Create a new event in the user's primary calendar."""
+    if check_for_duplicate(service, event_details):
+        return None  # Event already exists
+
+    event = {
+        'summary': event_details['summary'],
+        'start': {'dateTime': event_details['start'], 'timeZone': 'UTC'},
+        'end': {'dateTime': event_details['end'], 'timeZone': 'UTC'},
+    }
+    if event_details.get('colorId'):
+        event['colorId'] = event_details['colorId']
+
+    created_event = service.events().insert(calendarId='primary', body=event).execute()
+    return created_event.get('htmlLink')
+
+def modify_calendar_event(service, event_id, event_details):
+    """Modify an existing event in the user's primary calendar."""
+    event = service.events().get(calendarId='primary', eventId=event_id).execute()
+    event['summary'] = event_details['summary']
+    event['start'] = {'dateTime': event_details['start'], 'timeZone': 'UTC'}
+    event['end'] = {'dateTime': event_details['end'], 'timeZone': 'UTC'}
+    if event_details.get('colorId'):
+        event['colorId'] = event_details['colorId']
+    service.events().update(calendarId='primary', eventId=event_id, body=event).execute()
 
 @app.route('/')
 def index():
