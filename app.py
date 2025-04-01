@@ -15,6 +15,19 @@ app.secret_key = 'your-secret-key-here'  # Replace with a random string
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 VALID_COLOR_IDS = [str(i) for i in range(1, 12)]
 
+# Map common timezone phrases to IANA timezone names
+TIMEZONE_ALIASES = {
+    "jakarta time": "Asia/Jakarta",
+    "toronto time": "America/Toronto",
+    "new york time": "America/New_York",
+    "london time": "Europe/London",
+    "tokyo time": "Asia/Tokyo",
+    "los angeles time": "America/Los_Angeles",
+    "paris time": "Europe/Paris",
+    "sydney time": "Australia/Sydney",
+    # Add more aliases as needed
+}
+
 def get_service():
     creds = None
     if 'credentials' in session:
@@ -75,9 +88,13 @@ def parse_input(user_input):
 
         # Extract timezone (could be 1 or 2 words)
         tz_str = " ".join(time_tz_str[1:])
-        if tz_str not in pytz.all_timezones:
-            raise ValueError(f"Invalid timezone: '{tz_str}'. Use a valid timezone like 'Asia/Jakarta', 'America/New_York', etc.")
-        timezone = pytz.timezone(tz_str)
+        # Check if it's an alias or a valid IANA timezone
+        if tz_str in TIMEZONE_ALIASES:
+            timezone = pytz.timezone(TIMEZONE_ALIASES[tz_str])
+        elif tz_str in pytz.all_timezones:
+            timezone = pytz.timezone(tz_str)
+        else:
+            raise ValueError(f"Invalid timezone: '{tz_str}'. Use formats like 'jakarta time', 'new york time', or IANA names like 'Asia/Jakarta', 'America/New_York'")
 
         # Combine date and time, localize, and convert to UTC
         event_datetime = datetime.datetime.combine(date.date(), time)
@@ -98,7 +115,7 @@ def parse_input(user_input):
     except ValueError as e:
         raise ValueError(f"Error parsing input: {str(e)}. Example: '20th March 2025, 11am jakarta time, meeting with joe'")
 
-def checkcts_for_duplicate(service, event_details):
+def check_for_duplicate(service, event_details):
     """Check if an event with the same summary, start, and end time already exists."""
     events = service.events().list(
         calendarId='primary',
