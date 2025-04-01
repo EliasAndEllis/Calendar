@@ -13,12 +13,6 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Replace with a random string
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-TIMEZONE_MAP = {
-    "toronto time": "America/Toronto",
-    "new york time": "America/New_York",
-    "london time": "Europe/London",
-    "tokyo time": "Asia/Tokyo",
-}
 VALID_COLOR_IDS = [str(i) for i in range(1, 12)]
 
 def get_service():
@@ -62,47 +56,38 @@ def list_recent_events(service):
 
 def parse_input(user_input):
     """Parse user input with flexible date formats to extract event details."""
-    parts = user_input.lower().split()
-    if len(parts) < 4:
-        raise ValueError("Invalid input format. Use: date time timezone event_name")
+    # Split by commas to match desired format: "date, time timezone, event_name"
+    parts = [part.strip() for part in user_input.split(',')]
+    if len(parts) != 3:
+        raise ValueError("Invalid input format. Use: 'date, time timezone, event title' (e.g., '20th March 2025, 11am jakarta time, meeting with joe')")
 
-    # Use dateutil.parser to handle various date formats
     try:
-        # Try to parse the first 1-3 parts as a date
-        for i in range(1, 4):
-            date_str = " ".join(parts[:i])
-            try:
-                date = parser.parse(date_str)
-                if date.year == datetime.datetime.now().year:  # If year wasn't specified
-                    date = date.replace(year=datetime.datetime.now().year)
-                date_parts = i
-                break
-            except ValueError:
-                continue
-        else:
-            raise ValueError("Could not parse date. Try formats like 'March 17', '17 Mar', or '03/17'")
+        # Parse date
+        date_str = parts[0].lower()
+        date = parser.parse(date_str)
+        if date.year == datetime.datetime.now().year and "20" not in date_str:  # If year wasn't specified
+            date = date.replace(year=datetime.datetime.now().year)
 
-        # Extract time
-        time_str = parts[date_parts]
+        # Parse time and timezone
+        time_tz_str = parts[1].lower().split()
+        time_str = time_tz_str[0]
         time = parser.parse(time_str, default=datetime.datetime.now()).time()
+
+        # Extract timezone (could be 1 or 2 words)
+        tz_str = " ".join(time_tz_str[1:])
+        if tz_str not in pytz.all_timezones:
+            raise ValueError(f"Invalid timezone: '{tz_str}'. Use a valid timezone like 'Asia/Jakarta', 'America/New_York', etc.")
+        timezone = pytz.timezone(tz_str)
+
+        # Combine date and time, localize, and convert to UTC
         event_datetime = datetime.datetime.combine(date.date(), time)
-
-        # Extract timezone
-        tz_start = date_parts + 1
-        timezone_str = " ".join(parts[tz_start:tz_start+2]) if parts[tz_start] + " " + parts[tz_start+1] in TIMEZONE_MAP else parts[tz_start]
-        if timezone_str not in TIMEZONE_MAP:
-            raise ValueError(f"Invalid timezone. Supported timezones: {', '.join(TIMEZONE_MAP.keys())}")
-        timezone = pytz.timezone(TIMEZONE_MAP[timezone_str])
-
-        # Localize and convert to UTC
         event_datetime = timezone.localize(event_datetime)
         event_datetime_utc = event_datetime.astimezone(pytz.UTC)
 
-        # Extract event name
-        name_start = tz_start + 2 if " ".join(parts[tz_start:tz_start+2]) in TIMEZONE_MAP else tz_start + 1
-        event_name = " ".join(parts[name_start:])
+        # Event name
+        event_name = parts[2].strip()
         if not event_name:
-            raise ValueError("Event name cannot be empty.")
+            raise ValueError("Event title cannot be empty.")
 
         return {
             'summary': event_name,
@@ -111,9 +96,9 @@ def parse_input(user_input):
         }
 
     except ValueError as e:
-        raise ValueError(f"Error parsing input: {str(e)}")
+        raise ValueError(f"Error parsing input: {str(e)}. Example: '20th March 2025, 11am jakarta time, meeting with joe'")
 
-def check_for_duplicate(service, event_details):
+def checkcts_for_duplicate(service, event_details):
     """Check if an event with the same summary, start, and end time already exists."""
     events = service.events().list(
         calendarId='primary',
