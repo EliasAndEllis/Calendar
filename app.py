@@ -24,17 +24,13 @@ VALID_COLOR_IDS = [str(i) for i in range(1, 12)]
 def get_service():
     creds = None
     if 'credentials' in session:
-        creds = Credentials.from_authorized_user_info(session['credentials'], SCOPES)
+        creds = Credentials(**session['credentials'])
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-                session['credentials'] = credentials_to_dict(creds)  # Update session with refreshed credentials
-            except Exception as e:
-                print(f"Error refreshing credentials: {e}")
-                return None
+            creds.refresh(Request())
         else:
             return None
+    session['credentials'] = credentials_to_dict(creds)
     return build('calendar', 'v3', credentials=creds)
 
 def credentials_to_dict(credentials):
@@ -180,8 +176,7 @@ def callback():
     flow = Flow.from_client_secrets_file('credentials.json', SCOPES, state=state)
     flow.redirect_uri = url_for('callback', _external=True)
     flow.fetch_token(authorization_response=request.url)
-    credentials = flow.credentials
-    session['credentials'] = credentials_to_dict(credentials)  # Store full credentials
+    session['credentials'] = credentials_to_dict(flow.credentials)
     return redirect(url_for('index'))
 
 @app.route('/create', methods=['POST'])
